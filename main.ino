@@ -8,7 +8,7 @@
 // Configuración del LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Configuración del teclado (pines actualizados)
+// Configuración del teclado
 const byte FILAS = 4;
 const byte COLUMNAS = 4;
 char teclas[FILAS][COLUMNAS] = {
@@ -18,7 +18,6 @@ char teclas[FILAS][COLUMNAS] = {
   {'*','0','#','D'}
 };
 
-// Pines del teclado actualizados para coincidir con el primer código
 byte pinesFilas[FILAS] = {32, 14, 12, 13};  // Pines para las filas (L1 - L4)
 byte pinesColumnas[COLUMNAS] = {27, 26, 25, 33};  // Pines para las columnas (C1 - C4)
 Keypad teclado = Keypad(makeKeymap(teclas), pinesFilas, pinesColumnas, FILAS, COLUMNAS);
@@ -35,7 +34,7 @@ int estadoMenu = 0; // 0: menú principal, 1: ingreso de clave, 2: datos del sen
 // Configuración del sensor PIR, LED y buzzer
 const int pinPIR = 34;
 const int pinLED = 5;
-const int pinBuzzer = 35;
+const int pinBuzzer = 19;
 int contadorDetecciones = 0;
 unsigned long tiempoUltimaDeteccion = 0;
 const unsigned long retrasoDeteccion = 1000;
@@ -76,7 +75,7 @@ void mostrarMenuPrincipal() {
   lcd.setCursor(0, 0);
   lcd.print("1 Acceso 2 Sensor");
   lcd.setCursor(0, 1);
-  lcd.print("3 Huella Opcion ");
+  lcd.print("3 Huella");
 }
 
 void actualizarClave() {
@@ -135,24 +134,36 @@ void verificarSensorPIR() {
       tiempoUltimaDeteccion = millis();
       Serial.println("Movimiento detectado");
       Serial.println("Contador " + String(contadorDetecciones));
+
+      // Activar LED después de 3 detecciones
       if (contadorDetecciones >= 3 && !estadoLED) {
         digitalWrite(pinLED, HIGH);
         estadoLED = true;
       }
-      if (contadorDetecciones >= 20) {
+
+      // Activar buzzer después de 20 detecciones
+      if (contadorDetecciones >= 20 && !alarmaActivada) {
         digitalWrite(pinBuzzer, HIGH);
         alarmaActivada = true;
         Serial.println("Alarma activada");
       }
     }
   } else {
-    if (alarmaActivada) {
+    // Si no hay detección, apagar el buzzer y el LED después de 30 segundos
+    if (alarmaActivada && (millis() - tiempoUltimaDeteccion > 30000)) {
       digitalWrite(pinBuzzer, LOW);
       alarmaActivada = false;
+      Serial.println("Alarma desactivada");
     }
-    if (estadoLED) {
+    if (estadoLED && (millis() - tiempoUltimaDeteccion > 30000)) {
       digitalWrite(pinLED, LOW);
       estadoLED = false;
+    }
+
+    // Reiniciar el contador después de 30 segundos sin detecciones
+    if (millis() - tiempoUltimaDeteccion > 30000) {
+      contadorDetecciones = 0;
+      Serial.println("Contador reiniciado");
     }
   }
 }
@@ -173,8 +184,6 @@ void mostrarMensajeHuella(const char* mensaje) {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(mensaje);
-  delay(2000);
-  mostrarMenuPrincipal();
 }
 
 void manejarHuella() {
@@ -189,8 +198,10 @@ void manejarHuella() {
     int id = capturarHuella();
     if (id > 0) {
       mostrarMensajeHuella("Huella almacenada");
+      delay(2000); // Mostrar mensaje por 2 segundos
     } else {
       mostrarMensajeHuella("Error al registrar");
+      delay(2000); // Mostrar mensaje por 2 segundos
     }
   } else if (tecla == '2') {
     verificarHuella();
@@ -207,83 +218,143 @@ int capturarHuella() {
   while (p != FINGERPRINT_OK) {
     p = finger.getImage();
     if (p == FINGERPRINT_NOFINGER) {
-      delay(100);
+      delay(100); // Esperar 100 ms antes de intentar nuevamente
     } else if (p != FINGERPRINT_OK) {
       mostrarMensajeHuella("Error al capturar");
+      delay(2000); // Mostrar mensaje por 2 segundos
       return -1;
     }
   }
 
   mostrarMensajeHuella("Huella detectada");
+  delay(1000); // Esperar 1 segundo antes de continuar
+
   p = finger.image2Tz(1);
   if (p != FINGERPRINT_OK) {
     mostrarMensajeHuella("Error al convertir");
+    delay(2000); // Mostrar mensaje por 2 segundos
     return -1;
   }
 
   mostrarMensajeHuella("Retira tu dedo");
-  delay(1000);
-  while (finger.getImage() != FINGERPRINT_NOFINGER);
+  delay(2000); // Esperar 2 segundos para que el usuario retire el dedo
+
+  while (finger.getImage() != FINGERPRINT_NOFINGER) {
+    delay(100); // Esperar 100 ms antes de verificar nuevamente
+  }
 
   mostrarMensajeHuella("Coloca de nuevo");
+  delay(1000); // Esperar 1 segundo antes de continuar
+
   p = -1;
   while (p != FINGERPRINT_OK) {
     p = finger.getImage();
+    delay(100); // Esperar 100 ms antes de intentar nuevamente
   }
 
   mostrarMensajeHuella("Huella detectada");
+  delay(1000); // Esperar 1 segundo antes de continuar
+
   p = finger.image2Tz(2);
   if (p != FINGERPRINT_OK) {
     mostrarMensajeHuella("Error en 2da captura");
+    delay(2000); // Mostrar mensaje por 2 segundos
     return -1;
   }
 
   mostrarMensajeHuella("Creando modelo");
+  delay(1000); // Esperar 1 segundo antes de continuar
+
   p = finger.createModel();
   if (p != FINGERPRINT_OK) {
     mostrarMensajeHuella("Error al crear");
+    delay(2000); // Mostrar mensaje por 2 segundos
     return -1;
   }
 
+  // Captura del ID manualmente
   mostrarMensajeHuella("Ingresa ID (1-127)");
-  while (!teclado.getKey());
-  int id = teclado.waitForKey() - '0';
+  char idStr[4] = {0}; // Almacena el ID como cadena
+  int i = 0;
+  while (i < 3) { // Máximo 3 dígitos
+    char tecla = teclado.waitForKey();
+    if (tecla >= '0' && tecla <= '9') {
+      idStr[i++] = tecla;
+      lcd.setCursor(i + 10, 1);
+      lcd.print(tecla);
+    } else if (tecla == 'D' && i > 0) { // Borrar último dígito
+      idStr[--i] = 0;
+      lcd.setCursor(i + 10, 1);
+      lcd.print(" ");
+    } else if (tecla == '#') { // Confirmar ID
+      break;
+    }
+  }
+
+  int id = atoi(idStr); // Convertir cadena a número
   if (id < 1 || id > 127) {
     mostrarMensajeHuella("ID invalido");
+    delay(2000); // Mostrar mensaje por 2 segundos
     return -1;
   }
 
   p = finger.storeModel(id);
   if (p == FINGERPRINT_OK) {
+    mostrarMensajeHuella("Huella almacenada");
+    delay(2000); // Mostrar mensaje por 2 segundos
     return id;
   } else {
     mostrarMensajeHuella("Error al almacenar");
+    delay(2000); // Mostrar mensaje por 2 segundos
     return -1;
   }
 }
 
 void verificarHuella() {
+  unsigned long tiempoInicio = millis(); // Guardar el tiempo de inicio
   mostrarMensajeHuella("Coloca tu dedo");
-  int p = finger.getImage();
-  if (p != FINGERPRINT_OK) {
-    mostrarMensajeHuella("No se detecto");
-    return;
+  
+  while (millis() - tiempoInicio < 15000) { // Esperar hasta 15 segundos
+    int p = finger.getImage();
+    if (p == FINGERPRINT_OK) {
+      // Huella detectada, continuar con la verificación
+      mostrarMensajeHuella("Huella detectada");
+      delay(1000); // Esperar 1 segundo antes de continuar
+
+      p = finger.image2Tz(1);
+      if (p != FINGERPRINT_OK) {
+        mostrarMensajeHuella("Error al convertir");
+        delay(2000); // Mostrar mensaje por 2 segundos
+        return;
+      }
+
+      p = finger.fingerFastSearch();
+      if (p == FINGERPRINT_OK) {
+        mostrarMensajeHuella("Huella reconocida");
+        delay(2000); // Mostrar mensaje por 2 segundos
+        estaBloqueado = false; // Desbloquear el sistema
+        estadoMenu = 0; // Volver al menú principal
+        mostrarMenuPrincipal();
+        return; // Salir de la función después de reconocer la huella
+      } else {
+        mostrarMensajeHuella("No reconocida");
+        delay(2000); // Mostrar mensaje por 2 segundos
+        return; // Salir de la función si la huella no es reconocida
+      }
+    } else if (p != FINGERPRINT_NOFINGER) {
+      // Error en la captura de la huella
+      mostrarMensajeHuella("Error al capturar");
+      delay(2000); // Mostrar mensaje por 2 segundos
+      return;
+    }
+    delay(100); // Pequeño retardo para evitar saturación del bucle
   }
 
-  p = finger.image2Tz(1);
-  if (p != FINGERPRINT_OK) {
-    mostrarMensajeHuella("Error al convertir");
-    return;
-  }
-
-  p = finger.fingerFastSearch();
-  if (p == FINGERPRINT_OK) {
-    char mensaje[20];
-    sprintf(mensaje, "Huella reconocida", finger.fingerID);
-    mostrarMensajeHuella(mensaje);
-  } else {
-    mostrarMensajeHuella("No reconocida");
-  }
+  // Si pasan 15 segundos sin detectar huella, volver al menú principal
+  mostrarMensajeHuella("Tiempo agotado");
+  delay(2000); // Mostrar mensaje por 2 segundos
+  estadoMenu = 0; // Volver al menú principal
+  mostrarMenuPrincipal();
 }
 
 void loop() {
