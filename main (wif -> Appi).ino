@@ -7,6 +7,7 @@
 #include <HardwareSerial.h>
 #include <Adafruit_Fingerprint.h>
 
+
 // Configuración del LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -125,7 +126,8 @@ void loop() {
           estadoMenu = 2;
         }
         else if (tecla == '3') {
-          estadoMenu = 3;
+          // Verificar huella directamente
+          verificarHuella();
         }
         break;
       case 1:
@@ -138,15 +140,6 @@ void loop() {
         }
         else {
           mostrarDatosSensor();
-        }
-        break;
-      case 3:
-        if (tecla == 'D') {
-          estadoMenu = 0;
-          mostrarMenuPrincipal();
-        }
-        else {
-          manejarHuella();
         }
         break;
     }
@@ -165,7 +158,7 @@ void mostrarMenuPrincipal() {
   lcd.setCursor(0, 0);
   lcd.print("1 Acceso 2 Sensor");
   lcd.setCursor(0, 1);
-  lcd.print("3 Huella");
+  lcd.print("3 Verificar Huella"); // Cambiar texto de la opción 3
 }
 
 void actualizarClave() {
@@ -269,30 +262,6 @@ void mostrarMensajeHuella(const char* mensaje) {
   lcd.print(mensaje);
 }
 
-void manejarHuella() {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("1 Registrar");
-  lcd.setCursor(0, 1);
-  lcd.print("2 Verificar D Menu");
-  char tecla = teclado.waitForKey();
-  if (tecla == '1') {
-    int id = capturarHuella();
-    if (id > 0) {
-      mostrarMensajeHuella("Huella almacenada");
-      delay(2000);
-    } else {
-      mostrarMensajeHuella("Error al registrar");
-      delay(2000);
-    }
-  } else if (tecla == '2') {
-    verificarHuella();
-  } else if (tecla == 'D') {
-    estadoMenu = 0;
-    mostrarMenuPrincipal();
-  }
-}
-
 int capturarHuella() {
   int p = -1;
   mostrarMensajeHuella("Esperando huella...");
@@ -390,6 +359,8 @@ void verificarHuella() {
       if (p != FINGERPRINT_OK) {
         mostrarMensajeHuella("Error al convertir");
         delay(2000);
+        estadoMenu = 0;
+        mostrarMenuPrincipal();
         return;
       }
       p = finger.fingerFastSearch();
@@ -403,6 +374,8 @@ void verificarHuella() {
       } else {
         mostrarMensajeHuella("No reconocida");
         delay(2000);
+        estadoMenu = 0;
+        mostrarMenuPrincipal();
         return;
       }
     } else if (p != FINGERPRINT_NOFINGER) {
@@ -438,12 +411,16 @@ void handleRegister() {
 }
 
 void handleList() {
-    // Agregar el encabezado CORS
-  server.sendHeader("Access-Control-Allow-Origin", "*"); // Permite solicitudes desde cualquier origen
-  String response = "Huellas registradas:\n";
-  for (int id = 1; id <= 127; id++) {
-    if (finger.loadModel(id)) {
-      response += "ID: " + String(id) + "\n";
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  String response = "";
+  uint8_t p = finger.getTemplateCount();
+  if (p == FINGERPRINT_OK) {
+    for (int id = 1; id <= 127; id++) {
+      uint8_t result = finger.loadModel(id);
+      if (result == FINGERPRINT_OK) {
+        // Format: "huella N: ID; dd/mm/yyyy hh:mm:ss"
+        response += "huella con ID: " + String(id) + "\n";
+      }
     }
   }
   server.send(200, "text/plain", response);
