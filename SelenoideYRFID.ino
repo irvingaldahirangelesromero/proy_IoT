@@ -3,17 +3,21 @@
 
 #define SS_PIN 4   // Pin SS del RFID
 #define RST_PIN 15 // Pin RST del RFID
-#define LED_PIN 13  // LED en el pin 2
+#define LED_PIN 13 // LED en el pin 13
+#define RELAY_PIN 16 // Pin del solenoide
 
 MFRC522 mfrc522(SS_PIN, RST_PIN); // Crear la instancia del lector RFID
 
 void setup() {
     Serial.begin(115200);
-    SPI.begin();        // Iniciar SPI
-    mfrc522.PCD_Init(); // Iniciar RFID
+    SPI.begin();        
+    mfrc522.PCD_Init(); 
     
     pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW); // Apagar LED al inicio
+    pinMode(RELAY_PIN, OUTPUT);
+    
+    digitalWrite(LED_PIN, LOW);    // Apagar LED al inicio
+    digitalWrite(RELAY_PIN, HIGH); // Bloquear el solenoide al inicio
 
     Serial.println("Acerque una tarjeta RFID...");
 }
@@ -40,10 +44,17 @@ void loop() {
     }
     Serial.println(); // Nueva línea en la salida serial
 
-    // Encender LED cuando se lea una tarjeta
-    Serial.println("Tarjeta detectada, encendiendo LED...");
+    // Encender LED y activar el solenoide cuando se detecta una tarjeta
+    Serial.println("Tarjeta detectada. Desbloqueando puerta...");
     digitalWrite(LED_PIN, HIGH);
-    delay(2000);  // Mantener el LED encendido por 2 segundos
+    digitalWrite(RELAY_PIN, LOW); // Desbloquea la puerta (solenoide retraído)
+
+    delay(5000); // Mantener la puerta abierta por 5 segundos
+
+    // Apagar LED y volver a bloquear el solenoide
+    Serial.println("Bloqueando puerta nuevamente...");
     digitalWrite(LED_PIN, LOW);
+    digitalWrite(RELAY_PIN, HIGH); // Bloquear la puerta
+
     Serial.println("Esperando otra tarjeta...");
 }
