@@ -2,20 +2,22 @@ import express, { Request, Response } from "express";
 import mongoose, { Document, Schema } from "mongoose";
 import bodyParser from "body-parser";
 
-const uri ="mongodb+srv://Aldahir:aldahir.05@cluster0.hpmmu.mongodb.net/proyIoT?retryWrites=true&w=majority&appName=Cluster0";
+// URI de MongoDB Atlas
+const uri =
+  "mongodb+srv://Aldahir:aldahir.05@cluster0.hpmmu.mongodb.net/proyIoT?retryWrites=true&w=majority&appName=Cluster0";
 
-// Interfaz para el modelo de usuario
-interface IUser extends Document {
+// Interfaz para el modelo de contraseñasPuerta
+interface IPassword extends Document {
   password: string;
 }
 
-// Esquema de usuario
-const UserSchema: Schema = new Schema({
+// Esquema de contraseñasPuerta
+const PasswordSchema: Schema = new Schema({
   password: { type: String, required: true },
 });
 
-// Modelo de usuario
-const User = mongoose.model<IUser>("User", UserSchema);
+// Modelo de contraseñasPuerta
+const Password = mongoose.model<IPassword>("users", PasswordSchema);
 
 // Configuración de Express
 const app = express();
@@ -32,10 +34,10 @@ app.post("/compare-password", async (req: Request, res: Response) => {
   const { password } = req.body;
 
   try {
-    // Buscar si la contraseña existe en la base de datos
-    const user = await User.findOne({ password });
+    // Buscar si la contraseña existe en la colección contraseñasPuerta
+    const foundPassword = await Password.findOne({ password });
 
-    if (user) {
+    if (foundPassword) {
       res.send("OK"); // Contraseña correcta
     } else {
       res.send("ERROR"); // Contraseña incorrecta
@@ -48,10 +50,10 @@ app.post("/compare-password", async (req: Request, res: Response) => {
 
 // Ruta temporal para insertar una contraseña (solo para pruebas)
 app.get("/insert-password", async (req: Request, res: Response) => {
-  const newUser = new User({ password: "1234" });
+  const newPassword = new Password({ password: "1234" });
 
   try {
-    await newUser.save();
+    await newPassword.save();
     res.send("Contraseña insertada correctamente");
   } catch (error) {
     console.error("Error insertando contraseña:", error);
