@@ -5,3 +5,5 @@ npm install --save-dev typescript @types/express @types/node ts-node
 
 comando para correrlo:
 npx ts-node index.ts
+
+contrasennaBd.ino es el archivo de Arduino xd
